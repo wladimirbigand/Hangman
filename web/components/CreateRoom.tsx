@@ -6,14 +6,14 @@ import { motion } from 'framer-motion';
 import { useGame } from '../lib/GameContext';
 import type { Category, Difficulty } from '../lib/types';
 
-const CATEGORIES: { value: Category; label: string; emoji: string }[] = [
-  { value: 'melange', label: 'Melange', emoji: '🎲' },
-  { value: 'animaux', label: 'Animaux', emoji: '🐘' },
-  { value: 'pays', label: 'Pays', emoji: '🌍' },
-  { value: 'metiers', label: 'Metiers', emoji: '👩‍🚒' },
-  { value: 'nourriture', label: 'Nourriture', emoji: '🍕' },
-  { value: 'films', label: 'Films', emoji: '🎬' },
-  { value: 'jeuxvideo', label: 'Jeux video', emoji: '🎮' },
+const CATEGORIES: { value: Category; label: string }[] = [
+  { value: 'melange', label: 'Melange' },
+  { value: 'animaux', label: 'Animaux' },
+  { value: 'pays', label: 'Pays' },
+  { value: 'metiers', label: 'Metiers' },
+  { value: 'nourriture', label: 'Nourriture' },
+  { value: 'films', label: 'Films' },
+  { value: 'jeuxvideo', label: 'Jeux video' },
 ];
 
 const DIFFICULTIES: { value: Difficulty; label: string; desc: string }[] = [
@@ -29,6 +29,13 @@ const TIMER_OPTIONS = [
   { value: '90', label: '90s' },
   { value: 'none', label: 'Illimite' },
 ];
+
+/** Une option cochee est entouree au crayon, pas remplie de couleur. */
+function optionClass(selected: boolean) {
+  return selected
+    ? 'circled !border-ink text-ink font-bold'
+    : 'sketch border-graphite-soft/60 text-graphite hover:bg-highlighter/50';
+}
 
 export default function CreateRoom({ onBack }: { onBack: () => void }) {
   const router = useRouter();
@@ -75,15 +82,16 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
         onSubmit={handleSubmit}
         className="card w-full max-w-2xl p-6 sm:p-8 flex flex-col gap-6"
       >
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-3xl font-extrabold">🚀 Nouvelle partie</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-display text-4xl font-bold -rotate-1">Nouvelle partie</h1>
           <button type="button" className="btn-ghost text-sm" onClick={onBack}>
             Retour
           </button>
         </div>
+        <hr className="rule-line" />
 
         <div>
-          <label className="block font-bold mb-2">Ton pseudo</label>
+          <label className="block font-display text-xl mb-2">Ton pseudo</label>
           <input
             className="input"
             placeholder="Ex: Zoe_du_92"
@@ -94,20 +102,16 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
         </div>
 
         <div>
-          <label className="block font-bold mb-2">Categorie de mots</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {CATEGORIES.map((c) => (
+          <label className="block font-display text-xl mb-2">Categorie de mots</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {CATEGORIES.map((c, i) => (
               <button
                 type="button"
                 key={c.value}
                 onClick={() => setCategory(c.value)}
-                className={`rounded-xl px-3 py-3 text-sm font-bold border-2 transition-all ${
-                  category === c.value
-                    ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200'
-                    : 'border-transparent bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                style={{ rotate: `${((i % 3) - 1) * 0.5}deg` }}
+                className={`px-3 py-2.5 font-body transition-colors ${optionClass(category === c.value)}`}
               >
-                <div className="text-xl mb-1">{c.emoji}</div>
                 {c.label}
               </button>
             ))}
@@ -115,21 +119,17 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
         </div>
 
         <div>
-          <label className="block font-bold mb-2">Difficulte</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <label className="block font-display text-xl mb-2">Difficulte</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {DIFFICULTIES.map((d) => (
               <button
                 type="button"
                 key={d.value}
                 onClick={() => setDifficulty(d.value)}
-                className={`rounded-xl px-3 py-3 text-left border-2 transition-all ${
-                  difficulty === d.value
-                    ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40'
-                    : 'border-transparent bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                className={`px-3 py-2.5 text-left transition-colors ${optionClass(difficulty === d.value)}`}
               >
-                <div className="font-bold">{d.label}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{d.desc}</div>
+                <div className="font-display text-lg">{d.label}</div>
+                <div className="font-body text-sm text-graphite-soft">{d.desc}</div>
               </button>
             ))}
           </div>
@@ -137,18 +137,14 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <label className="block font-bold mb-2">Nombre de manches</label>
-            <div className="flex gap-2">
+            <label className="block font-display text-xl mb-2">Nombre de manches</label>
+            <div className="flex gap-2.5">
               {ROUNDS_OPTIONS.map((r) => (
                 <button
                   type="button"
                   key={r}
                   onClick={() => setRounds(r)}
-                  className={`flex-1 rounded-xl py-2 font-bold border-2 transition-all ${
-                    rounds === r
-                      ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40'
-                      : 'border-transparent bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  className={`flex-1 py-2 font-display text-lg transition-colors ${optionClass(rounds === r)}`}
                 >
                   {r}
                 </button>
@@ -157,18 +153,14 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
           </div>
 
           <div>
-            <label className="block font-bold mb-2">Temps par tour</label>
-            <div className="flex gap-2">
+            <label className="block font-display text-xl mb-2">Temps par tour</label>
+            <div className="flex gap-2.5">
               {TIMER_OPTIONS.map((t) => (
                 <button
                   type="button"
                   key={t.value}
                   onClick={() => setTimePerTurn(t.value)}
-                  className={`flex-1 rounded-xl py-2 font-bold border-2 transition-all text-sm ${
-                    timePerTurn === t.value
-                      ? 'border-green-500 bg-green-100 dark:bg-green-900/40'
-                      : 'border-transparent bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  className={`flex-1 py-2 font-body text-sm transition-colors ${optionClass(timePerTurn === t.value)}`}
                 >
                   {t.label}
                 </button>
@@ -178,8 +170,8 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
         </div>
 
         <div>
-          <label className="block font-bold mb-2">
-            Nombre max de joueurs : <span className="text-indigo-500">{maxPlayers}</span>
+          <label className="block font-display text-xl mb-2">
+            Nombre max de joueurs : <span className="font-marker text-ink text-2xl ml-1">{maxPlayers}</span>
           </label>
           <input
             type="range"
@@ -187,12 +179,12 @@ export default function CreateRoom({ onBack }: { onBack: () => void }) {
             max={10}
             value={maxPlayers}
             onChange={(e) => setMaxPlayers(Number(e.target.value))}
-            className="w-full accent-indigo-500"
+            className="w-full accent-[color:var(--ink)]"
           />
         </div>
 
-        <button className="btn-primary w-full text-lg" type="submit" disabled={loading}>
-          {loading ? 'Creation...' : 'Creer la salle 🎉'}
+        <button className="btn-primary w-full text-xl" type="submit" disabled={loading}>
+          {loading ? 'Creation...' : 'Creer la salle'}
         </button>
       </motion.form>
     </div>

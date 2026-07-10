@@ -30,33 +30,23 @@ export default function JoinModal({ code }: { code: string }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden">
-      <div className="absolute inset-0 flex items-center justify-center opacity-20 text-9xl select-none pointer-events-none">
-        🎪
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="fixed inset-0 bg-black/40 z-40"
-      />
-
+    <div className="min-h-screen flex items-center justify-center px-4 py-10">
       <motion.form
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.92, y: 20, rotate: -2 }}
+        animate={{ opacity: 1, scale: 1, y: 0, rotate: -0.8 }}
         onSubmit={handleSubmit}
-        className="card relative z-50 w-full max-w-md p-8 flex flex-col gap-5"
+        className="card w-full max-w-md p-8 flex flex-col gap-5"
       >
         <div className="text-center">
-          <div className="text-5xl mb-2">🔑</div>
-          <h1 className="font-display text-2xl font-extrabold">Rejoindre la salle</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Code : <span className="font-mono font-bold tracking-widest">{code}</span>
+          <h1 className="font-display text-3xl font-bold">Rejoindre la salle</h1>
+          <hr className="rule-line my-3" />
+          <p className="font-body text-graphite-soft">
+            Code : <span className="font-marker text-2xl text-ink tracking-wider ml-1">{code}</span>
           </p>
         </div>
 
         <div>
-          <label className="block font-bold mb-2">Ton pseudo</label>
+          <label className="block font-display text-xl mb-2">Ton pseudo</label>
           <input
             className="input"
             placeholder="Ex: Zoe_du_92"
@@ -67,14 +57,13 @@ export default function JoinModal({ code }: { code: string }) {
           />
         </div>
 
+        {/* Remarque du prof dans la marge */}
         {error && (
-          <div className="rounded-xl bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-4 py-3 text-sm font-semibold">
-            {error}
-          </div>
+          <p className="circled-red font-body text-redpen px-4 py-2 -rotate-1">{error}</p>
         )}
 
         <button className="btn-primary w-full text-lg" type="submit" disabled={loading}>
-          {loading ? 'Connexion...' : 'Rejoindre 🎉'}
+          {loading ? 'Connexion...' : 'Rejoindre'}
         </button>
         <button type="button" className="btn-ghost w-full" onClick={() => router.push('/')}>
           Retour a l&apos;accueil

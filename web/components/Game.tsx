@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGame } from '../lib/GameContext';
@@ -16,9 +16,19 @@ const CATEGORY_LABELS: Record<Category, string> = {
   nourriture: 'Nourriture', films: 'Films', jeuxvideo: 'Jeux video',
 };
 
+/** Trait de crayon legerement ondule, sous chaque lettre du mot. */
+function PencilDash() {
+  return (
+    <svg viewBox="0 0 40 6" className="w-full h-1.5 text-graphite" style={{ filter: 'url(#sketch)' }} aria-hidden="true">
+      <path d="M 2 4 Q 12 2.2 20 3.6 T 38 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function Game() {
   const router = useRouter();
-  const { room, gameState, roundEnd, gameOverData, myId, guessLetter, guessWord, leaveRoom } = useGame();
+  const { room, gameState, roundEnd, gameOverData, myId, guessLetter, guessWord, leaveRoom, restartGame, nextRound } =
+    useGame();
   const [wordGuess, setWordGuess] = useState('');
   const [showWordInput, setShowWordInput] = useState(false);
 
@@ -28,18 +38,27 @@ export default function Game() {
   };
 
   if (gameOverData) {
-    return <Podium classement={gameOverData.classement} onLeave={handleLeave} />;
+    const isHost = room?.hostId === myId;
+    return (
+      <Podium
+        classement={gameOverData.classement}
+        isHost={isHost}
+        onReplay={restartGame}
+        onLeave={handleLeave}
+      />
+    );
   }
 
   if (!room || !gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-lg font-bold animate-pulse">Chargement de la partie...</p>
+        <p className="font-display text-2xl animate-pulse">Chargement de la partie...</p>
       </div>
     );
   }
 
   const isMyTurn = gameState.currentPlayerId === myId;
+  const isHost = room.hostId === myId;
   const currentPlayer = room.players.find((p) => p.id === gameState.currentPlayerId);
   const letters = gameState.maskedWord.split(' ');
 
@@ -56,14 +75,12 @@ export default function Game() {
     <div className="min-h-screen px-4 py-6 flex flex-col items-center">
       <div className="w-full max-w-5xl flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="font-display font-extrabold text-xl">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-display font-bold text-2xl">
               Manche {gameState.round}/{gameState.totalRounds}
             </span>
-            <span className="rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 px-3 py-1 text-xs font-bold">
-              {CATEGORY_LABELS[room.settings.category]}
-            </span>
-            <span className="rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300 px-3 py-1 text-xs font-bold uppercase">
+            <span className="font-body text-sm highlight -rotate-1">{CATEGORY_LABELS[room.settings.category]}</span>
+            <span className="font-body text-sm text-redpen underline decoration-wavy underline-offset-4">
               {room.settings.difficulty}
             </span>
           </div>
@@ -73,28 +90,31 @@ export default function Game() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 card p-6 flex flex-col gap-5 items-center">
+          <div className="card lg:col-span-2 p-6 flex flex-col gap-5 items-center">
             <HangmanDrawing errors={gameState.errors} maxErrors={gameState.maxErrors} />
 
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-500 dark:text-slate-400">
-              ❌ {gameState.errors}/{gameState.maxErrors} erreurs
+            <div className="font-body text-redpen">
+              {gameState.errors}/{gameState.maxErrors} erreurs
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2">
+            {/* Le mot : un trait de crayon par lettre, l'encre bleue par-dessus. */}
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
               {letters.map((ch, i) => (
-                <motion.div
-                  key={`${i}-${ch}`}
-                  initial={ch !== '_' ? { scale: 0, rotate: -10 } : false}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-                  className={`w-9 h-11 sm:w-11 sm:h-14 flex items-center justify-center rounded-lg font-display font-extrabold text-xl sm:text-2xl border-b-4 ${
-                    ch !== '_'
-                      ? 'bg-green-100 dark:bg-green-900/40 border-green-400 text-green-700 dark:text-green-300'
-                      : 'bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600'
-                  }`}
-                >
-                  {ch !== '_' ? ch : ''}
-                </motion.div>
+                <div key={`${i}-${ch}`} className="w-8 sm:w-10 flex flex-col items-center">
+                  <div className="h-12 sm:h-14 flex items-end justify-center">
+                    {ch !== '_' && (
+                      <motion.span
+                        initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
+                        animate={{ opacity: 1, scale: 1, rotate: (i % 3) - 1 }}
+                        transition={{ type: 'spring', stiffness: 350, damping: 14 }}
+                        className="font-marker text-3xl sm:text-4xl text-ink leading-none"
+                      >
+                        {ch}
+                      </motion.span>
+                    )}
+                  </div>
+                  <PencilDash />
+                </div>
               ))}
             </div>
 
@@ -102,13 +122,11 @@ export default function Game() {
               key={gameState.currentPlayerId ?? 'none'}
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 ${
-                isMyTurn
-                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 animate-wiggle'
-                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'
+              className={`font-display text-xl px-3 py-1 ${
+                isMyTurn ? 'highlight text-graphite animate-wiggle' : 'text-graphite-soft'
               }`}
             >
-              {isMyTurn ? "🎯 C'est ton tour !" : `⏳ Tour de ${currentPlayer?.pseudo || '...'}`}
+              {isMyTurn ? "A toi de jouer !" : `Au tour de ${currentPlayer?.pseudo || '...'}`}
             </motion.div>
 
             <Timer timeLeft={gameState.timeLeft} timePerTurn={gameState.timePerTurn} />
@@ -120,9 +138,10 @@ export default function Game() {
               disabled={!isMyTurn || !gameState.roundActive}
             />
 
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               {showWordInput ? (
                 <motion.form
+                  key="word-input"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -136,64 +155,119 @@ export default function Game() {
                     value={wordGuess}
                     onChange={(e) => setWordGuess(e.target.value)}
                   />
-                  <button className="btn-secondary" type="submit">Valider</button>
+                  <button className="btn-primary" type="submit">Valider</button>
                 </motion.form>
               ) : (
                 <button
+                  key="word-toggle"
                   type="button"
                   disabled={!isMyTurn || !gameState.roundActive}
                   className="btn-ghost text-sm"
                   onClick={() => setShowWordInput(true)}
                 >
-                  💡 Deviner le mot entier
+                  Deviner le mot entier
                 </button>
               )}
             </AnimatePresence>
           </div>
 
-          <div className="card p-5">
-            <h2 className="font-display font-bold text-lg mb-3">🏆 Scores</h2>
+          <div className="card-alt p-5">
+            <h2 className="font-display font-bold text-2xl mb-1">Les scores</h2>
+            <hr className="rule-line mb-2" />
             <Scoreboard scores={gameState.scores} myId={myId} currentPlayerId={gameState.currentPlayerId} />
           </div>
         </div>
       </div>
 
       <AnimatePresence>
-        {roundEnd && !gameOverData && <RoundEndOverlay roundEnd={roundEnd} room={room} />}
+        {roundEnd && !gameOverData && (
+          <RoundEndOverlay roundEnd={roundEnd} room={room} isHost={isHost} onContinue={nextRound} />
+        )}
       </AnimatePresence>
     </div>
   );
 }
 
-function RoundEndOverlay({ roundEnd, room }: { roundEnd: RoundEndPayload; room: RoomSnapshot }) {
+/**
+ * Compte a rebours affiche entre deux manches. Le serveur reste maitre : il
+ * enchaine tout seul a `nextRoundAt` et l'ecran se ferme a la reception du
+ * `game-state` suivant. Ce compteur n'est qu'un affichage, et l'hote peut
+ * ecourter l'attente via "Continuer" (event `next-round`).
+ */
+function useCountdown(target?: number) {
+  const [left, setLeft] = useState(() => (target ? Math.max(0, Math.ceil((target - Date.now()) / 1000)) : 0));
+
+  useEffect(() => {
+    if (!target) return undefined;
+    const tick = () => setLeft(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [target]);
+
+  return left;
+}
+
+function RoundEndOverlay({
+  roundEnd,
+  room,
+  isHost,
+  onContinue,
+}: {
+  roundEnd: RoundEndPayload;
+  room: RoomSnapshot;
+  isHost: boolean;
+  onContinue: () => void;
+}) {
   const winner = room.players.find((p) => p.id === roundEnd.winnerId);
+  const secondsLeft = useCountdown(roundEnd.nextRoundAt);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4"
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
     >
       <motion.div
-        initial={{ scale: 0.7, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+        initial={{ scale: 0.8, opacity: 0, rotate: -2 }}
+        animate={{ scale: 1, opacity: 1, rotate: -0.6 }}
+        exit={{ scale: 0.9, opacity: 0 }}
         className="card p-8 text-center max-w-md w-full"
       >
-        <div className="text-6xl mb-3">{roundEnd.won ? '🎉' : '😵'}</div>
-        <h2 className="font-display text-2xl font-extrabold mb-2">
-          {roundEnd.won ? 'Mot trouve !' : 'Perdu pour cette manche !'}
+        <h2 className="font-display text-4xl font-bold mb-1">
+          {roundEnd.won ? 'Trouve !' : 'Rate...'}
         </h2>
-        <p className="text-lg mb-4">
-          Le mot etait : <span className="font-display font-extrabold text-indigo-500">{roundEnd.word}</span>
+        <hr className="rule-line my-3" />
+
+        <p className="font-body text-lg mb-3">
+          Le mot etait <span className="font-marker text-2xl text-ink ml-1">{roundEnd.word}</span>
         </p>
+
         {roundEnd.won && winner && (
-          <p className="font-bold text-green-600 dark:text-green-400 mb-4">
-            Bravo {winner.pseudo} ! 🏅
-          </p>
+          <p className="font-display text-2xl text-greenpen mb-3 -rotate-1">Bravo {winner.pseudo} !</p>
         )}
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Manche {roundEnd.round}/{roundEnd.totalRounds} terminee — la suite arrive...
+
+        <p className="font-body text-graphite-soft">
+          Manche {roundEnd.round}/{roundEnd.totalRounds} terminee
         </p>
+
+        <div className="mt-5 flex flex-col items-center gap-3">
+          <p className="font-display text-xl">
+            Prochaine manche dans{' '}
+            <span key={secondsLeft} className="inline-block font-marker text-3xl text-redpen animate-scribbleIn">
+              {secondsLeft}
+            </span>
+          </p>
+
+          {isHost ? (
+            <button type="button" className="btn-primary" onClick={onContinue}>
+              Continuer maintenant
+            </button>
+          ) : (
+            <p className="font-body text-sm text-graphite-soft">L&apos;hote peut passer l&apos;attente.</p>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );

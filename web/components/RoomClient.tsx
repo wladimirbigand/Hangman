@@ -26,7 +26,7 @@ export default function RoomClient({ code }: { code: string }) {
   if (!checked) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-lg font-bold animate-pulse">Connexion a la salle...</p>
+        <p className="font-display text-2xl animate-pulse">Connexion a la salle...</p>
       </div>
     );
   }

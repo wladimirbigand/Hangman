@@ -62,6 +62,8 @@ interface GameContextValue {
   joinRoom: (code: string, pseudo: string) => Promise<CreateOrJoinResult>;
   tryRejoin: (code: string) => Promise<boolean>;
   startGame: () => void;
+  nextRound: () => void;
+  restartGame: () => void;
   guessLetter: (letter: string) => void;
   guessWord: (word: string) => void;
   sendChat: (text: string) => void;
@@ -150,7 +152,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const onDisconnect = () => setConnected(false);
     const onReconnectAttempt = () => setReconnecting(true);
 
-    const onRoomUpdate = (payload: RoomSnapshot) => setRoom(payload);
+    const onRoomUpdate = (payload: RoomSnapshot) => {
+      setRoom(payload);
+      // Filet de securite : retour au lobby (relance de partie, ou reconnexion
+      // dans une salle deja relancee) => on purge tout etat de partie residuel.
+      if (payload.status === 'lobby') {
+        setGameState(null);
+        setRoundEnd(null);
+        setGameOverData(null);
+      }
+    };
 
     const onPlayerJoined = ({ pseudo, reconnected }: { pseudo: string; reconnected: boolean }) => {
       pushToast(reconnected ? `${pseudo} est de retour` : `${pseudo} a rejoint la partie`, 'success');
@@ -165,7 +176,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       pushToast('La partie commence !', 'success');
     };
 
-    const onGameState = (state: GameState) => setGameState(state);
+    const onGameRestarted = () => {
+      setGameState(null);
+      setRoundEnd(null);
+      setGameOverData(null);
+      pushToast('Retour au salon : nouvelle partie !', 'info');
+    };
+
+    const onGameState = (state: GameState) => {
+      setGameState(state);
+      // Le serveur enchaine la manche suivante en emettant `game-state` : c'est
+      // ce signal (et non un timer client) qui referme l'ecran de fin de manche.
+      if (state.roundActive) setRoundEnd(null);
+    };
 
     const onLetterResult = (payload: { error?: string; correct?: boolean }) => {
       if (payload.error) {
@@ -211,6 +234,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on('player-joined', onPlayerJoined);
     socket.on('player-left', onPlayerLeft);
     socket.on('game-started', onGameStarted);
+    socket.on('game-restarted', onGameRestarted);
     socket.on('game-state', onGameState);
     socket.on('letter-result', onLetterResult);
     socket.on('word-result', onWordResult);
@@ -227,6 +251,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off('player-joined', onPlayerJoined);
       socket.off('player-left', onPlayerLeft);
       socket.off('game-started', onGameStarted);
+      socket.off('game-restarted', onGameRestarted);
       socket.off('game-state', onGameState);
       socket.off('letter-result', onLetterResult);
       socket.off('word-result', onWordResult);
@@ -266,6 +291,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [socket]);
 
   const startGame = useCallback(() => socket?.emit('start-game'), [socket]);
+  const nextRound = useCallback(() => socket?.emit('next-round'), [socket]);
+  const restartGame = useCallback(() => socket?.emit('restart-game'), [socket]);
   const guessLetter = useCallback((letter: string) => socket?.emit('guess-letter', { letter }), [socket]);
   const guessWord = useCallback((word: string) => socket?.emit('guess-word', { word }), [socket]);
   const sendChat = useCallback((text: string) => socket?.emit('chat-message', { text }), [socket]);
@@ -302,6 +329,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     joinRoom,
     tryRejoin,
     startGame,
+    nextRound,
+    restartGame,
     guessLetter,
     guessWord,
     sendChat,
@@ -310,7 +339,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     dismissToast,
     pushToast,
   }), [ready, connected, reconnecting, session, myId, room, gameState, roundEnd, gameOverData, toasts, darkMode,
-    createRoom, joinRoom, tryRejoin, startGame, guessLetter, guessWord, sendChat, leaveRoom,
+    createRoom, joinRoom, tryRejoin, startGame, nextRound, restartGame, guessLetter, guessWord, sendChat, leaveRoom,
     toggleDarkMode, dismissToast, pushToast]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

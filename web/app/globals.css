@@ -2,19 +2,117 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   THEME — Cahier d'ecolier (clair) / Tableau noir (sombre)
+   Toutes les couleurs passent par des variables pour que `.dark` bascule
+   l'ensemble du jeu du crayon-sur-papier a la craie-sur-ardoise.
+   ========================================================================== */
+/* Les couleurs sont stockees en canaux RGB bruts : c'est ce qui permet aux
+   modificateurs d'opacite de Tailwind (`border-graphite-soft/40`) de fonctionner
+   via `rgb(var(--x) / <alpha-value>)` (cf. tailwind.config.ts). Les alias
+   `--paper`, `--graphite`... restent disponibles pour le CSS ecrit a la main. */
+:root {
+  --paper-rgb: 250 243 224;
+  --rule-rgb: 189 215 238;
+  --graphite-rgb: 43 43 43;
+  --graphite-soft-rgb: 74 74 74;
+  --ink-rgb: 26 60 143;
+  --redpen-rgb: 192 57 43;
+  --greenpen-rgb: 39 174 96;
+
+  --margin-line: #d98a8a;
+  --highlighter: #f9e547;
+
+  /* Espacement des lignes du cahier — sert aussi de rythme vertical */
+  --rule-height: 28px;
+  /* Ombre "gribouillee" : trait decale, jamais de flou */
+  --sketch-shadow: 3px 3px 0 rgba(43, 43, 43, 0.18);
+  --chalk-glow: none;
+}
+
+html.dark {
+  --paper-rgb: 36 53 42;
+  --graphite-rgb: 232 232 224;
+  --graphite-soft-rgb: 191 196 184;
+  --ink-rgb: 168 200 240;
+  --redpen-rgb: 240 138 126;
+  --greenpen-rgb: 126 217 154;
+
+  --rule: transparent;
+  --margin-line: transparent;
+
+  --sketch-shadow: 3px 3px 0 rgba(232, 232, 224, 0.12);
+  /* Effet craie : le trait "poudre" legerement */
+  --chalk-glow: 0 0 2px rgba(232, 232, 224, 0.45);
+}
+
+:root,
+html.dark {
+  --paper: rgb(var(--paper-rgb));
+  --graphite: rgb(var(--graphite-rgb));
+  --graphite-soft: rgb(var(--graphite-soft-rgb));
+  --ink: rgb(var(--ink-rgb));
+  --redpen: rgb(var(--redpen-rgb));
+  --greenpen: rgb(var(--greenpen-rgb));
+}
+
+:root {
+  --rule: rgb(var(--rule-rgb));
+}
+
 html,
-body,
-#root {
+body {
   height: 100%;
 }
 
 body {
-  font-family: 'Nunito', system-ui, sans-serif;
-  @apply bg-gradient-to-br from-indigo-50 via-purple-50 to-amber-50 text-slate-800 transition-colors duration-300;
+  @apply text-graphite;
+  font-family: var(--font-patrick), 'Comic Sans MS', cursive;
+  background-color: var(--paper);
+  position: relative;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  text-shadow: var(--chalk-glow);
 }
 
-html.dark body {
-  @apply bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100;
+/* Lignes horizontales du cahier + marge rouge verticale.
+   `repeating-linear-gradient` est ici un motif de papier, pas un effet de style. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--rule-height) - 1px),
+    var(--rule) calc(var(--rule-height) - 1px),
+    var(--rule) var(--rule-height)
+  );
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: clamp(18px, 5vw, 64px);
+  width: 2px;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--margin-line);
+  opacity: 0.7;
+}
+
+/* Mode tableau noir : plus de lignes, mais des traces d'effacement de craie. */
+html.dark body::before {
+  background-image: radial-gradient(
+      ellipse 55% 30% at 22% 28%,
+      rgba(232, 232, 224, 0.05),
+      transparent 70%
+    ),
+    radial-gradient(ellipse 45% 25% at 78% 62%, rgba(232, 232, 224, 0.04), transparent 70%),
+    radial-gradient(ellipse 60% 20% at 45% 88%, rgba(232, 232, 224, 0.03), transparent 70%);
 }
 
 ::-webkit-scrollbar {
@@ -22,37 +120,179 @@ html.dark body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.5);
-  border-radius: 8px;
+  background: var(--graphite-soft);
+  opacity: 0.4;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.font-display {
-  letter-spacing: 0.01em;
+::selection {
+  background: var(--highlighter);
+  color: #2b2b2b;
 }
 
-.card {
-  @apply rounded-3xl bg-white/80 dark:bg-slate-800/80 backdrop-blur shadow-xl shadow-indigo-200/40 dark:shadow-black/40 border border-white/60 dark:border-slate-700/60;
+/* ==========================================================================
+   Formes dessinees a la main
+   ========================================================================== */
+@layer components {
+  /* Bordure irreguliere : les 8 rayons different, le trait ne "ferme" jamais
+     parfaitement — c'est ce qui donne l'air griffonne. */
+  .sketch {
+    border: 2px solid var(--graphite);
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  }
+
+  .sketch-alt {
+    border: 2px solid var(--graphite);
+    border-radius: 15px 225px 15px 255px / 225px 15px 255px 15px;
+  }
+
+  .card {
+    @apply sketch p-4;
+    background-color: var(--paper);
+    box-shadow: var(--sketch-shadow);
+  }
+
+  .card-alt {
+    @apply sketch-alt p-4;
+    background-color: var(--paper);
+    box-shadow: var(--sketch-shadow);
+  }
+
+  .btn {
+    @apply sketch inline-flex items-center justify-center gap-2 px-5 py-2.5 font-body font-bold;
+    color: var(--graphite);
+    background-color: transparent;
+    box-shadow: var(--sketch-shadow);
+    position: relative;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+
+  /* Au hover, un coup de surligneur passe derriere le texte. */
+  .btn::before {
+    content: '';
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    top: 22%;
+    bottom: 22%;
+    background: var(--highlighter);
+    opacity: 0;
+    transform: skewX(-6deg);
+    transition: opacity 0.12s ease;
+    z-index: -1;
+  }
+  .btn:hover:not(:disabled)::before {
+    opacity: 0.6;
+  }
+
+  /* Au clic, le bouton s'enfonce dans le papier. */
+  .btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 rgba(43, 43, 43, 0.18);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Bouton principal : le trait a ete repasse au stylo. */
+  .btn-primary {
+    @apply btn;
+    border-width: 3px;
+    border-color: var(--ink);
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .btn-secondary {
+    @apply btn;
+    border-color: var(--graphite);
+  }
+
+  .btn-ghost {
+    @apply btn;
+    border-style: dashed;
+    box-shadow: none;
+  }
+  .btn-ghost:active:not(:disabled) {
+    box-shadow: none;
+  }
+
+  .btn-danger {
+    @apply btn;
+    border-color: var(--redpen);
+    color: var(--redpen);
+  }
+
+  .input {
+    @apply sketch w-full px-4 py-2.5 font-body text-base outline-none;
+    background-color: transparent;
+    color: var(--graphite);
+    caret-color: var(--ink);
+  }
+  .input::placeholder {
+    color: var(--graphite-soft);
+    opacity: 0.55;
+  }
+  .input:focus {
+    border-color: var(--ink);
+    box-shadow: var(--sketch-shadow);
+  }
+
+  /* Trait de crayon ondule qui sert de separateur. */
+  .rule-line {
+    height: 6px;
+    border: 0;
+    background-repeat: repeat-x;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='6'><path d='M0 3 Q 5 0 10 3 T 20 3 T 30 3 T 40 3' fill='none' stroke='%232B2B2B' stroke-width='1.2' opacity='0.5'/></svg>");
+  }
+  html.dark .rule-line {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='6'><path d='M0 3 Q 5 0 10 3 T 20 3 T 30 3 T 40 3' fill='none' stroke='%23E8E8E0' stroke-width='1.2' opacity='0.5'/></svg>");
+  }
+
+  /* Coup de surligneur sur un mot. */
+  .highlight {
+    background: linear-gradient(
+      to bottom,
+      transparent 15%,
+      var(--highlighter) 15%,
+      var(--highlighter) 85%,
+      transparent 85%
+    );
+    opacity: 1;
+    padding: 0 0.2em;
+  }
+  html.dark .highlight {
+    background: none;
+    box-shadow: inset 0 -0.5em 0 rgba(249, 229, 71, 0.28);
+  }
+
+  /* Post-it : legerement de travers, colle sur la page. */
+  .postit-note {
+    background: var(--postit, #fdf3a7);
+    border: 1.5px solid rgba(43, 43, 43, 0.6);
+    border-radius: 2px 12px 4px 10px / 10px 3px 14px 4px;
+    box-shadow: 2px 3px 0 rgba(43, 43, 43, 0.2);
+    color: #2b2b2b;
+    transform: rotate(-1.4deg);
+  }
+
+  /* Entoure d'un cercle au crayon (bonne reponse, meilleur score...). */
+  .circled {
+    border: 2px solid var(--greenpen);
+    border-radius: 60% 40% 55% 45% / 45% 55% 40% 60%;
+  }
+
+  .circled-red {
+    border: 2px solid var(--redpen);
+    border-radius: 55% 45% 60% 40% / 40% 60% 45% 55%;
+  }
 }
 
-.btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-display font-bold text-white shadow-lg transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
-}
-
-.btn-primary {
-  @apply btn bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 shadow-indigo-300/50;
-}
-
-.btn-secondary {
-  @apply btn bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 shadow-amber-300/50;
-}
-
-.btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-display font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-100/70 dark:bg-slate-700/60 hover:bg-indigo-200/70 dark:hover:bg-slate-700 transition-all active:scale-95;
-}
-
-.input {
-  @apply w-full rounded-xl border-2 border-indigo-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-base outline-none focus:border-indigo-500 dark:focus:border-indigo-400 transition-colors placeholder:text-slate-400;
+/* Le texte a la craie ne porte pas d'ombre sur les elements deja lumineux. */
+html.dark .no-chalk {
+  text-shadow: none;
 }

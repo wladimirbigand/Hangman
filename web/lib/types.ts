@@ -69,6 +69,8 @@ export interface RoundEndPayload {
   roundScores: { id: string; points: number }[];
   scores: ScoreEntry[];
   isGameOver: boolean;
+  /** Horodatage serveur (ms) du demarrage automatique de la manche suivante. Absent si la partie est finie. */
+  nextRoundAt?: number;
 }
 
 export interface GameOverPayload {
