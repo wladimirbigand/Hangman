@@ -30,12 +30,14 @@ class Room {
     this.settings = settings;
     this.players = new Map(); // token -> player
     this.hostToken = null;
-    this.status = 'lobby'; // lobby | playing | gameover
+    this.status = 'lobby'; // lobby | playing | roundend | gameover
     this.chat = [];
     this.engine = null;
     this.disconnectTimers = new Map();
     this.createdAt = Date.now();
     this.playerCounter = 0;
+    this.lastRoundEnd = null;
+    this.nextRoundTimer = null;
   }
 
   pseudoTaken(pseudo) {
@@ -125,6 +127,29 @@ class Room {
     this.status = 'playing';
     this.engine = new GameEngine(this);
     return this.engine.startNextRound();
+  }
+
+  /**
+   * Ramene la salle en lobby apres une partie terminee : scores a zero, moteur
+   * detruit (le prochain startGame en cree un neuf, donc un nouveau tirage de
+   * mots), joueurs et parametres conserves tels quels.
+   */
+  resetToLobby() {
+    if (this.engine) this.engine.stop();
+    this.engine = null;
+    this.clearNextRoundTimer();
+    this.status = 'lobby';
+    this.lastRoundEnd = null;
+    this.players.forEach((p) => {
+      p.score = 0;
+    });
+  }
+
+  clearNextRoundTimer() {
+    if (this.nextRoundTimer) {
+      clearTimeout(this.nextRoundTimer);
+      this.nextRoundTimer = null;
+    }
   }
 
   toPublicPlayers() {

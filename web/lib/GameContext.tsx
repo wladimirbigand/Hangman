@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { getSocket } from './socket-client';
 import { sounds } from './sounds';
@@ -77,6 +77,13 @@ const GameContext = createContext<GameContextValue | null>(null);
 
 let toastSeq = 0;
 
+/**
+ * Duree minimale d'affichage de la revelation du mot, utilisee uniquement en
+ * repli quand le serveur ne pilote pas lui-meme la transition (ancien serveur
+ * qui n'envoie pas `nextRoundAt` dans `round-end`).
+ */
+const ROUND_END_FALLBACK_MS = 5000;
+
 export function GameProvider({ children }: { children: React.ReactNode }) {
   // Le socket n'est cree que cote client (voir socket-client.ts), jamais pendant le
   // rendu serveur : on part d'un etat null identique sur SSR et premier rendu client
@@ -91,6 +98,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [darkMode, setDarkMode] = useState(false);
+
+  // Garde-fou anti-ecrasement : si `game-over` arrive alors que la revelation du
+  // mot est encore a l'ecran, on retient le podium jusqu'a la fin du delai.
+  const revealUntilRef = useRef(0);
+  const serverPacesRoundEndRef = useRef(false);
+  const gameOverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingGameOver = useCallback(() => {
+    if (gameOverTimerRef.current) {
+      clearTimeout(gameOverTimerRef.current);
+      gameOverTimerRef.current = null;
+    }
+    revealUntilRef.current = 0;
+  }, []);
 
   // sessionStorage/localStorage/socket ne sont accessibles qu'apres montage (SSR-safe).
   useEffect(() => {
@@ -157,6 +178,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // Filet de securite : retour au lobby (relance de partie, ou reconnexion
       // dans une salle deja relancee) => on purge tout etat de partie residuel.
       if (payload.status === 'lobby') {
+        clearPendingGameOver();
         setGameState(null);
         setRoundEnd(null);
         setGameOverData(null);
@@ -177,6 +199,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const onGameRestarted = () => {
+      clearPendingGameOver();
       setGameState(null);
       setRoundEnd(null);
       setGameOverData(null);
@@ -208,14 +231,38 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const onRoundEnd = (payload: RoundEndPayload) => {
-      setRoundEnd(payload);
+      // Un serveur a jour pilote lui-meme le delai et fournit `nextRoundAt` ; sinon
+      // on en fabrique un pour garantir que le mot reste lisible 5 secondes.
+      serverPacesRoundEndRef.current = payload.nextRoundAt != null;
+      const nextRoundAt = payload.nextRoundAt ?? Date.now() + ROUND_END_FALLBACK_MS;
+      revealUntilRef.current = nextRoundAt;
+      setRoundEnd({ ...payload, nextRoundAt });
       if (payload.won) sounds.victory();
       else sounds.defeat();
     };
 
-    const onGameOver = (payload: GameOverPayload) => {
+    const showPodium = (payload: GameOverPayload) => {
       setGameOverData(payload);
       setRoundEnd(null);
+      gameOverTimerRef.current = null;
+      revealUntilRef.current = 0;
+    };
+
+    const onGameOver = (payload: GameOverPayload) => {
+      // Quand le serveur cadence la fin de manche, il n'emet `game-over` qu'au bon
+      // moment (y compris si l'hote a ecourte l'attente) : on lui fait confiance.
+      // Face a un serveur qui enchaine `round-end` et `game-over` d'un trait, on
+      // retient le podium le temps que la revelation du mot soit vue.
+      const delay = serverPacesRoundEndRef.current
+        ? 0
+        : Math.max(0, revealUntilRef.current - Date.now());
+
+      if (gameOverTimerRef.current) clearTimeout(gameOverTimerRef.current);
+      if (delay === 0) {
+        showPodium(payload);
+        return;
+      }
+      gameOverTimerRef.current = setTimeout(() => showPodium(payload), delay);
     };
 
     const onNewMessage = (message: RoomSnapshot['chat'][number]) => {
@@ -259,8 +306,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off('game-over', onGameOver);
       socket.off('new-message', onNewMessage);
       socket.off('tick', onTick);
+      clearPendingGameOver();
     };
-  }, [socket, pushToast, tryRejoin]);
+  }, [socket, pushToast, tryRejoin, clearPendingGameOver]);
 
   const createRoom = useCallback((params: Omit<CreateRoomParams, 'pseudo'>, pseudo: string): Promise<CreateOrJoinResult> => {
     return new Promise((resolve, reject) => {
@@ -326,13 +374,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const leaveRoom = useCallback(() => {
     socket?.emit('leave-room');
+    clearPendingGameOver();
     clearSession();
     setSession(null);
     setRoom(null);
     setGameState(null);
     setRoundEnd(null);
     setGameOverData(null);
-  }, [socket]);
+  }, [socket, clearPendingGameOver]);
 
   const toggleDarkMode = useCallback(() => setDarkMode((d) => !d), []);
   const dismissToast = useCallback((id: number) => setToasts((prev) => prev.filter((t) => t.id !== id)), []);

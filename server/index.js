@@ -103,24 +103,60 @@ function attachEngineCallbacks(room) {
   };
 }
 
+// Duree d'affichage de l'ecran de fin de manche avant l'enchainement automatique.
+// Le serveur reste maitre de la transition : le client ne fait qu'afficher le
+// compte a rebours deduit de `nextRoundAt`, il ne declenche jamais la manche.
+const NEXT_ROUND_DELAY_MS = 5000;
+
+/**
+ * Passe effectivement a la manche suivante. Idempotent : le garde `status`
+ * empeche un double-enchainement si l'hote clique sur "Continuer" au moment ou
+ * le timer automatique se declenche.
+ */
+function advanceToNextRound(room) {
+  if (!rooms.has(room.code) || room.status !== 'roundend' || !room.engine) return;
+  room.clearNextRoundTimer();
+  room.status = 'playing';
+  room.lastRoundEnd = null;
+  const state = room.engine.startNextRound();
+  io.to(room.code).emit('game-state', state);
+  broadcastRoomUpdate(room);
+}
+
+/** Cloture la partie apres l'ecran de fin de la derniere manche. */
+function finishGame(room) {
+  if (!rooms.has(room.code) || room.status !== 'roundend') return;
+  room.clearNextRoundTimer();
+  room.status = 'gameover';
+  io.to(room.code).emit('game-over', { classement: room.toScoreboard() });
+  broadcastRoomUpdate(room);
+}
+
+/** Sortie de l'ecran de fin de manche : manche suivante, ou podium si c'etait la derniere. */
+function leaveRoundEnd(room) {
+  if (room.lastRoundEnd && room.lastRoundEnd.isGameOver) finishGame(room);
+  else advanceToNextRound(room);
+}
+
+/**
+ * Toutes les fins de manche passent par le meme ecran de 5 secondes, y compris
+ * la derniere : sinon le podium recouvrirait aussitot la revelation du mot.
+ */
 function handleRoundEnd(room, roundEnd) {
   room.status = 'roundend';
-  room.lastRoundEnd = roundEnd; // permet de rattraper un joueur qui se reconnecte pendant/apres cette manche
-  io.to(room.code).emit('round-end', roundEnd);
+
+  // Horodatage absolu : un joueur qui se reconnecte pendant la fin de manche
+  // retrouve le compte a rebours au bon endroit au lieu de repartir de 5s.
+  const payload = { ...roundEnd, nextRoundAt: Date.now() + NEXT_ROUND_DELAY_MS };
+  room.lastRoundEnd = payload; // permet de rattraper un joueur qui se reconnecte pendant cette manche
+  io.to(room.code).emit('round-end', payload);
   broadcastRoomUpdate(room);
 
-  if (roundEnd.isGameOver) {
-    room.status = 'gameover';
-    io.to(room.code).emit('game-over', { classement: room.toScoreboard() });
-    return;
-  }
-
-  setTimeout(() => {
-    if (!rooms.has(room.code) || room.status !== 'roundend') return;
-    room.status = 'playing';
-    const state = room.engine.startNextRound();
-    io.to(room.code).emit('game-state', state);
-  }, 4000);
+  room.clearNextRoundTimer();
+  room.nextRoundTimer = setTimeout(() => {
+    room.nextRoundTimer = null;
+    leaveRoundEnd(room);
+  }, NEXT_ROUND_DELAY_MS);
 }
 
 function leaveRoomInternal(socket, code) {
@@ -135,6 +171,7 @@ function leaveRoomInternal(socket, code) {
 
   if (room.isEmpty()) {
     if (room.engine) room.engine.stop();
+    room.clearNextRoundTimer();
     rooms.delete(code);
     log(`Salle ${code} supprimee (vide)`);
     return;
@@ -248,6 +285,42 @@ io.on('connection', (socket) => {
     broadcastRoomUpdate(room);
   });
 
+  // L'hote peut ecourter le compte a rebours de fin de manche.
+  socket.on('next-round', () => {
+    const entry = socketIndex.get(socket.id);
+    if (!entry) return;
+    const room = rooms.get(entry.code);
+    if (!room) return;
+    if (room.hostToken !== entry.token) return;
+    leaveRoundEnd(room);
+  });
+
+  // Fin de partie : l'hote renvoie tout le monde au lobby de la meme salle.
+  // Chaque refus est renvoye au client via l'accuse de reception : sans cela,
+  // un clic sur "Rejouer" qui echoue une garde ne produit aucun effet visible.
+  socket.on('restart-game', (_payload, callback) => {
+    const ack = typeof _payload === 'function' ? _payload : callback;
+    const fail = (reason) => {
+      log(`restart-game refuse (socket ${socket.id}) : ${reason}`);
+      if (typeof ack === 'function') ack({ error: reason });
+    };
+
+    log(`restart-game recu du socket ${socket.id}`);
+
+    const entry = socketIndex.get(socket.id);
+    if (!entry) return fail('Session introuvable : reconnecte-toi a la salle.');
+    const room = rooms.get(entry.code);
+    if (!room) return fail("Cette salle n'existe plus.");
+    if (room.hostToken !== entry.token) return fail("Seul l'hote peut relancer la partie.");
+    if (room.status !== 'gameover') return fail('La partie n\'est pas terminee.');
+
+    room.resetToLobby();
+    log(`Salle ${room.code} renvoyee au lobby par l'hote`);
+    io.to(room.code).emit('game-restarted');
+    broadcastRoomUpdate(room);
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
   socket.on('guess-letter', ({ letter } = {}) => {
     const entry = socketIndex.get(socket.id);
     if (!entry) return;
@@ -333,6 +406,7 @@ io.on('connection', (socket) => {
       log(`${player.pseudo} retire definitivement de ${room.code} (timeout reconnexion)`);
       if (room.isEmpty()) {
         if (room.engine) room.engine.stop();
+        room.clearNextRoundTimer();
         rooms.delete(room.code);
         log(`Salle ${room.code} supprimee (vide)`);
         return;
