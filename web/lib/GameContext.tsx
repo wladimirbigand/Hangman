@@ -292,7 +292,34 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const startGame = useCallback(() => socket?.emit('start-game'), [socket]);
   const nextRound = useCallback(() => socket?.emit('next-round'), [socket]);
-  const restartGame = useCallback(() => socket?.emit('restart-game'), [socket]);
+  /**
+   * "Rejouer" : le serveur accuse reception. En cas d'echec parce que le socket
+   * n'est plus rattache a la salle (reconnexion silencieuse pendant la partie),
+   * on se re-annonce puis on retente une fois — sinon le clic resterait sans effet.
+   */
+  const restartGame = useCallback(() => {
+    if (!socket) {
+      pushToast('Connexion au serveur en cours, reessaie dans un instant.', 'warning');
+      return;
+    }
+    const stored = loadSession();
+    socket.emit('restart-game', (res: { error?: string } | undefined) => {
+      if (!res?.error) return;
+      if (!stored) {
+        pushToast(res.error, 'error');
+        return;
+      }
+      tryRejoin(stored.code).then((ok) => {
+        if (!ok) {
+          pushToast(res.error as string, 'error');
+          return;
+        }
+        socket.emit('restart-game', (retry: { error?: string } | undefined) => {
+          if (retry?.error) pushToast(retry.error, 'error');
+        });
+      });
+    });
+  }, [socket, pushToast, tryRejoin]);
   const guessLetter = useCallback((letter: string) => socket?.emit('guess-letter', { letter }), [socket]);
   const guessWord = useCallback((word: string) => socket?.emit('guess-word', { word }), [socket]);
   const sendChat = useCallback((text: string) => socket?.emit('chat-message', { text }), [socket]);

@@ -235,17 +235,25 @@ function RoundEndOverlay({
         exit={{ scale: 0.9, opacity: 0 }}
         className="card p-8 text-center max-w-md w-full"
       >
-        <h2 className="font-display text-4xl font-bold mb-1">
-          {roundEnd.won ? 'Trouve !' : 'Rate...'}
+        <h2 className={`font-display text-4xl font-bold mb-1 ${roundEnd.won ? 'text-greenpen' : 'text-redpen'}`}>
+          {roundEnd.won ? 'Bravo ! 🎉' : 'Perdu ! 💀'}
         </h2>
         <hr className="rule-line my-3" />
 
-        <p className="font-body text-lg mb-3">
-          Le mot etait <span className="font-marker text-2xl text-ink ml-1">{roundEnd.word}</span>
-        </p>
+        {/* La revelation : le mot, en grand, entoure au feutre vert ou rouge. */}
+        <p className="font-body text-lg text-graphite-soft">Le mot etait :</p>
+        <motion.p
+          initial={{ scale: 0.6, opacity: 0, rotate: -6 }}
+          animate={{ scale: 1, opacity: 1, rotate: -1.5 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.15 }}
+          className={`font-marker text-4xl sm:text-5xl my-4 mx-auto inline-block px-4 py-2 break-all
+            ${roundEnd.won ? 'text-greenpen circled' : 'text-redpen circled-red'}`}
+        >
+          {roundEnd.word}
+        </motion.p>
 
         {roundEnd.won && winner && (
-          <p className="font-display text-2xl text-greenpen mb-3 -rotate-1">Bravo {winner.pseudo} !</p>
+          <p className="font-display text-2xl text-greenpen mb-2 -rotate-1">Trouve par {winner.pseudo} !</p>
         )}
 
         <p className="font-body text-graphite-soft">
@@ -254,7 +262,7 @@ function RoundEndOverlay({
 
         <div className="mt-5 flex flex-col items-center gap-3">
           <p className="font-display text-xl">
-            Prochaine manche dans{' '}
+            {roundEnd.isGameOver ? 'Classement final dans' : 'Prochaine manche dans'}{' '}
             <span key={secondsLeft} className="inline-block font-marker text-3xl text-redpen animate-scribbleIn">
               {secondsLeft}
             </span>
@@ -262,7 +270,7 @@ function RoundEndOverlay({
 
           {isHost ? (
             <button type="button" className="btn-primary" onClick={onContinue}>
-              Continuer maintenant
+              {roundEnd.isGameOver ? 'Voir le classement' : 'Continuer maintenant'}
             </button>
           ) : (
             <p className="font-body text-sm text-graphite-soft">L&apos;hote peut passer l&apos;attente.</p>
